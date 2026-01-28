@@ -1,4 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+// @ts-ignore
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@^2.39.0';
 
 // Helper to safely get environment variables (works with Vite import.meta.env or standard process.env)
 const getEnv = (key: string) => {

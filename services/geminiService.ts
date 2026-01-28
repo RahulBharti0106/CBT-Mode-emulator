@@ -1,6 +1,8 @@
-import { GoogleGenAI, Type } from "@google/genai";
+// @ts-ignore
+import { GoogleGenAI, Type } from "https://esm.sh/@google/genai@^1.38.0";
+// @ts-ignore
+import { v4 as uuidv4 } from 'https://esm.sh/uuid@^13.0.0';
 import { Exam, QuestionType, Subject, Section, Question } from "../types";
-import { v4 as uuidv4 } from 'uuid';
 
 // We use the 2.5 flash model for efficient multimodal document parsing
 const MODEL_NAME = "gemini-2.5-flash-latest";
