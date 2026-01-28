@@ -1,2 +1,0 @@
--- The Supabase SQL Schema is provided in the external documentation/chat.
--- This file is kept as a placeholder to maintain project structure.
