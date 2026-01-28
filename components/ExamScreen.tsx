@@ -168,7 +168,8 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
 
   const moveToNextQuestion = () => {
     // Find flattened index
-    const allQ = Array.from(allQuestionsMap.values());
+    // Explicitly cast to Question[] to avoid type inference issues
+    const allQ: Question[] = Array.from(allQuestionsMap.values());
     const idx = allQ.findIndex(q => q.id === currentQuestionId);
     if (idx < allQ.length - 1) {
       const nextQ = allQ[idx + 1];

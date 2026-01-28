@@ -24,7 +24,7 @@ function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) setView('DASHBOARD');
+      if (session) setView('LANDING'); // Changed from DASHBOARD to LANDING
       else setView('AUTH');
     });
 
@@ -33,8 +33,8 @@ function App() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
-         // If coming from login, go to dashboard. But if already in exam/result, stay there.
-         setView(prev => prev === 'AUTH' ? 'DASHBOARD' : prev);
+         // If coming from login, go to LANDING. But if already in exam/result, stay there.
+         setView(prev => prev === 'AUTH' ? 'LANDING' : prev); // Changed from DASHBOARD to LANDING
       } else {
          setView('AUTH');
       }
