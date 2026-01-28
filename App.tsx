@@ -1,13 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ExamScreen from './components/ExamScreen';
 import AdminUpload from './components/AdminUpload';
 import { MOCK_EXAM } from './services/mockData';
-import { ExamState, Exam } from './types';
+import { ExamState, Exam, QuestionType } from './types';
+import { supabase } from './services/supabase';
 
 function App() {
   const [hasStarted, setHasStarted] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
   const [result, setResult] = useState<ExamState | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [calculatedScore, setCalculatedScore] = useState<{score: number, correct: number, incorrect: number} | null>(null);
   
   // State to manage the active exam (default mock or uploaded)
   const [activeExam, setActiveExam] = useState<Exam>(MOCK_EXAM);
@@ -17,6 +21,90 @@ function App() {
     setActiveExam(newExam);
     setShowUpload(false);
     alert(`Successfully loaded ${newExam.subjects.flatMap(s => s.sections.flatMap(sec => sec.questions)).length} questions from PDF.`);
+  };
+
+  // Logic to save results to Supabase when exam is finished
+  useEffect(() => {
+    if (result && result.examStatus === 'SUBMITTED' && saveStatus === 'idle') {
+      calculateAndSave(result);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
+
+  const calculateAndSave = async (examState: ExamState) => {
+    setIsSaving(true);
+    
+    // 1. Calculate Score
+    let correct = 0;
+    let incorrect = 0;
+    let score = 0;
+    
+    // Create a map for fast question lookup
+    const qMap = new Map();
+    activeExam.subjects.forEach(s => s.sections.forEach(sec => sec.questions.forEach(q => qMap.set(q.id, q))));
+
+    Object.values(examState.responses).forEach(response => {
+        const question = qMap.get(response.questionId);
+        if (!question) return;
+
+        let isAnswerCorrect = false;
+        let isAnswered = false;
+
+        if (question.type === QuestionType.MCQ) {
+            if (response.selectedOptionId) {
+                isAnswered = true;
+                const opt = question.options?.find((o: any) => o.id === response.selectedOptionId);
+                if (opt?.isCorrect) isAnswerCorrect = true;
+            }
+        } else {
+            // Numeric
+            if (response.numericAnswer) {
+                isAnswered = true;
+                if (parseFloat(response.numericAnswer) === question.correctValue) isAnswerCorrect = true;
+            }
+        }
+
+        if (isAnswered) {
+            if (isAnswerCorrect) {
+                correct++;
+                score += 4;
+            } else {
+                incorrect++;
+                score -= 1;
+            }
+        }
+    });
+
+    setCalculatedScore({ score, correct, incorrect });
+
+    // 2. Save to Supabase
+    try {
+        const { error } = await supabase
+            .from('exam_results')
+            .insert([
+                {
+                    exam_name: activeExam.name,
+                    score: score,
+                    correct_answers: correct,
+                    incorrect_answers: incorrect,
+                    total_questions: qMap.size,
+                    details: examState.responses,
+                    created_at: new Date().toISOString()
+                }
+            ]);
+
+        if (error) {
+            console.error('Supabase save error:', error);
+            setSaveStatus('error');
+        } else {
+            setSaveStatus('success');
+        }
+    } catch (err) {
+        console.error('Save exception:', err);
+        setSaveStatus('error');
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   if (result) {
@@ -30,7 +118,7 @@ function App() {
             Thank you for taking the JEE (Main) mock test.
           </div>
           
-          <div className="grid grid-cols-2 gap-4 mb-8 text-left">
+          <div className="grid grid-cols-2 gap-4 mb-6 text-left">
              <div className="bg-gray-100 p-3 rounded">
                 <div className="text-xs text-gray-500">Status</div>
                 <div className="font-bold text-green-600">Submitted</div>
@@ -41,9 +129,37 @@ function App() {
              </div>
           </div>
 
-          <p className="text-sm text-gray-500 italic mb-6">
-            Detailed solutions and score analysis would be displayed here by fetching from Supabase 'responses' table.
-          </p>
+          {calculatedScore && (
+              <div className="bg-blue-50 border border-blue-100 p-4 rounded mb-6">
+                <div className="text-center mb-2 font-medium text-blue-800">Score Summary</div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                        <div className="text-xl font-bold text-green-600">{calculatedScore.correct}</div>
+                        <div className="text-xs text-gray-500">Correct</div>
+                    </div>
+                    <div>
+                        <div className="text-xl font-bold text-red-500">{calculatedScore.incorrect}</div>
+                        <div className="text-xs text-gray-500">Incorrect</div>
+                    </div>
+                    <div>
+                        <div className="text-xl font-bold text-blue-700">{calculatedScore.score}</div>
+                        <div className="text-xs text-gray-500">Total Score</div>
+                    </div>
+                </div>
+              </div>
+          )}
+
+          {/* Saving Status */}
+          <div className="mb-6">
+            {isSaving && <div className="text-blue-500 text-sm animate-pulse">Saving results to database...</div>}
+            {saveStatus === 'success' && <div className="text-green-600 text-sm font-medium">Results saved successfully to Supabase!</div>}
+            {saveStatus === 'error' && (
+                <div className="text-red-500 text-sm">
+                    Failed to save results. Check console for table schema errors.<br/>
+                    (Ensure table 'exam_results' exists)
+                </div>
+            )}
+          </div>
 
           <button 
             onClick={() => window.location.reload()}
