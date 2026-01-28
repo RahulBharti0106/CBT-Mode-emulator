@@ -65,3 +65,16 @@ export interface ExamState {
   isSubmitModalOpen: boolean;
   examStatus: 'INSTRUCTIONS' | 'ONGOING' | 'SUBMITTED';
 }
+
+export type ExamType = 'JEE' | 'NEET' | 'CUET';
+
+export interface ExamMetadata {
+  id: string;
+  title: string;
+  type: ExamType;
+  year: number;
+  date: string;
+  shift?: string;
+  status: 'AVAILABLE' | 'COMING_SOON';
+  description?: string;
+}

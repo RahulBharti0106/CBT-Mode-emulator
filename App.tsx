@@ -1,37 +1,58 @@
 import React, { useState, useEffect } from 'react';
+import LandingPage from './components/LandingPage';
 import ExamScreen from './components/ExamScreen';
-import AdminUpload from './components/AdminUpload';
 import { MOCK_EXAM } from './services/mockData';
 import { ExamState, Exam, QuestionType } from './types';
 import { supabase } from './services/supabase';
 
+type ViewState = 'LANDING' | 'INSTRUCTIONS' | 'EXAM' | 'RESULT';
+
 function App() {
-  const [hasStarted, setHasStarted] = useState(false);
+  const [view, setView] = useState<ViewState>('LANDING');
+  const [activeExam, setActiveExam] = useState<Exam | null>(null);
+  
   const [isChecked, setIsChecked] = useState(false);
   const [result, setResult] = useState<ExamState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [calculatedScore, setCalculatedScore] = useState<{score: number, correct: number, incorrect: number} | null>(null);
-  
-  // State to manage the active exam (default mock or uploaded)
-  const [activeExam, setActiveExam] = useState<Exam>(MOCK_EXAM);
-  const [showUpload, setShowUpload] = useState(false);
 
-  const handleExamLoaded = (newExam: Exam) => {
-    setActiveExam(newExam);
-    setShowUpload(false);
-    alert(`Successfully loaded ${newExam.subjects.flatMap(s => s.sections.flatMap(sec => sec.questions)).length} questions from PDF.`);
+  // Logic to handle exam selection from landing page
+  const handleSelectExam = (examId: string) => {
+    // In a real app, you would fetch the specific JSON for 'examId'.
+    // Since we only have one mock exam data right now, we map the available ID to our MOCK_EXAM object.
+    if (examId === 'jee-main-2025-jan-22-s1') {
+      setActiveExam(MOCK_EXAM);
+      setView('INSTRUCTIONS');
+      setIsChecked(false); // Reset instruction checkbox
+    } else {
+      // Should not be reachable given UI logic, but good safety
+      alert("This exam content is not yet loaded.");
+    }
+  };
+
+  const handleFinishExam = (state: ExamState) => {
+    setResult(state);
+    setView('RESULT');
+  };
+
+  const handleBackToHome = () => {
+    setResult(null);
+    setActiveExam(null);
+    setCalculatedScore(null);
+    setSaveStatus('idle');
+    setView('LANDING');
   };
 
   // Logic to save results to Supabase when exam is finished
   useEffect(() => {
-    if (result && result.examStatus === 'SUBMITTED' && saveStatus === 'idle') {
-      calculateAndSave(result);
+    if (view === 'RESULT' && result && result.examStatus === 'SUBMITTED' && saveStatus === 'idle' && activeExam) {
+      calculateAndSave(result, activeExam);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result]);
+  }, [view, result]);
 
-  const calculateAndSave = async (examState: ExamState) => {
+  const calculateAndSave = async (examState: ExamState, exam: Exam) => {
     setIsSaving(true);
     
     // 1. Calculate Score
@@ -41,7 +62,7 @@ function App() {
     
     // Create a map for fast question lookup
     const qMap = new Map();
-    activeExam.subjects.forEach(s => s.sections.forEach(sec => sec.questions.forEach(q => qMap.set(q.id, q))));
+    exam.subjects.forEach(s => s.sections.forEach(sec => sec.questions.forEach(q => qMap.set(q.id, q))));
 
     Object.values(examState.responses).forEach(response => {
         const question = qMap.get(response.questionId);
@@ -83,7 +104,7 @@ function App() {
             .from('exam_results')
             .insert([
                 {
-                    exam_name: activeExam.name,
+                    exam_name: exam.name,
                     score: score,
                     correct_answers: correct,
                     incorrect_answers: incorrect,
@@ -107,8 +128,14 @@ function App() {
     }
   };
 
-  if (result) {
-    const attempted = Object.values(result.responses).filter(r => r.status === 'ANSWERED' || r.status === 'ANSWERED_MARKED_FOR_REVIEW').length;
+  // --- RENDER VIEWS ---
+
+  if (view === 'LANDING') {
+    return <LandingPage onSelectExam={handleSelectExam} />;
+  }
+
+  if (view === 'RESULT') {
+    const attempted = result ? Object.values(result.responses).filter(r => r.status === 'ANSWERED' || r.status === 'ANSWERED_MARKED_FOR_REVIEW').length : 0;
     
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
@@ -162,7 +189,7 @@ function App() {
           </div>
 
           <button 
-            onClick={() => window.location.reload()}
+            onClick={handleBackToHome}
             className="w-full bg-blue-600 text-white py-3 rounded font-bold hover:bg-blue-700 transition"
           >
             Back to Home
@@ -172,18 +199,18 @@ function App() {
     );
   }
 
-  if (!hasStarted) {
+  // INSTRUCTIONS VIEW
+  if (view === 'INSTRUCTIONS' && activeExam) {
     return (
       <div className="h-screen w-full overflow-y-auto bg-white flex flex-col relative">
-         {showUpload && (
-           <AdminUpload 
-             onExamLoaded={handleExamLoaded} 
-             onCancel={() => setShowUpload(false)} 
-           />
-         )}
-
-         <header className="bg-blue-900 text-white p-4 sticky top-0 z-10 shadow-md">
+         <header className="bg-blue-900 text-white p-4 sticky top-0 z-10 shadow-md flex justify-between items-center">
             <h1 className="text-xl font-bold">NTA Mock Test Simulator</h1>
+            <button 
+              onClick={handleBackToHome}
+              className="text-xs bg-blue-800 hover:bg-blue-700 px-3 py-1 rounded"
+            >
+              Cancel
+            </button>
          </header>
          
          <main className="flex-1 max-w-4xl mx-auto p-8 w-full">
@@ -231,16 +258,9 @@ function App() {
                 </label>
             </div>
 
-            <div className="flex justify-between items-center pb-8">
+            <div className="flex justify-end items-center pb-8">
                 <button 
-                    onClick={() => setShowUpload(true)}
-                    className="text-gray-500 hover:text-blue-600 text-sm font-medium underline"
-                >
-                    Admin: Upload Question Paper (PDF)
-                </button>
-
-                <button 
-                    onClick={() => setHasStarted(true)}
+                    onClick={() => setView('EXAM')}
                     disabled={!isChecked}
                     className={`
                       px-8 py-3 rounded font-bold shadow-lg w-full md:w-auto transition-all
@@ -257,7 +277,12 @@ function App() {
     );
   }
 
-  return <ExamScreen key={activeExam.id} exam={activeExam} onFinish={(state) => setResult(state)} />;
+  if (view === 'EXAM' && activeExam) {
+    return <ExamScreen key={activeExam.id} exam={activeExam} onFinish={handleFinishExam} />;
+  }
+
+  // Fallback
+  return null;
 }
 
 export default App;
