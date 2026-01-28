@@ -6,6 +6,7 @@ import { ExamState, Exam } from './types';
 
 function App() {
   const [hasStarted, setHasStarted] = useState(false);
+  const [isChecked, setIsChecked] = useState(false);
   const [result, setResult] = useState<ExamState | null>(null);
   
   // State to manage the active exam (default mock or uploaded)
@@ -57,7 +58,7 @@ function App() {
 
   if (!hasStarted) {
     return (
-      <div className="min-h-screen bg-white flex flex-col relative">
+      <div className="h-screen w-full overflow-y-auto bg-white flex flex-col relative">
          {showUpload && (
            <AdminUpload 
              onExamLoaded={handleExamLoaded} 
@@ -65,9 +66,10 @@ function App() {
            />
          )}
 
-         <header className="bg-blue-900 text-white p-4">
+         <header className="bg-blue-900 text-white p-4 sticky top-0 z-10 shadow-md">
             <h1 className="text-xl font-bold">NTA Mock Test Simulator</h1>
          </header>
+         
          <main className="flex-1 max-w-4xl mx-auto p-8 w-full">
             <h2 className="text-2xl font-bold mb-6 border-b pb-2">Instructions</h2>
             
@@ -76,7 +78,7 @@ function App() {
                Questions: {activeExam.subjects.reduce((acc, s) => acc + s.sections.reduce((a, sec) => a + sec.questions.length, 0), 0)} loaded.
             </div>
 
-            <div className="prose prose-sm text-gray-700 mb-8 max-h-[60vh] overflow-y-auto border p-4 rounded bg-gray-50">
+            <div className="prose prose-sm text-gray-700 mb-8 border p-4 rounded bg-gray-50">
                <p className="font-bold">Please read the instructions carefully</p>
                <ul className="list-disc pl-5 space-y-2">
                  <li>Total duration of this test is <strong>{activeExam.durationMinutes} minutes</strong>.</li>
@@ -100,12 +102,20 @@ function App() {
                </ul>
             </div>
 
-            <div className="flex items-center gap-2 mb-6">
-                <input type="checkbox" id="confirm" className="h-5 w-5 text-blue-600" />
-                <label htmlFor="confirm" className="text-sm text-gray-700">I have read and understood the instructions. I agree that I am not carrying any prohibited material.</label>
+            <div className="flex items-start gap-3 mb-8 p-4 bg-blue-50 rounded border border-blue-100">
+                <input 
+                  type="checkbox" 
+                  id="confirm" 
+                  className="mt-1 h-5 w-5 text-blue-600 cursor-pointer" 
+                  checked={isChecked}
+                  onChange={(e) => setIsChecked(e.target.checked)}
+                />
+                <label htmlFor="confirm" className="text-sm text-gray-800 cursor-pointer font-medium select-none">
+                  I have read and understood the instructions. I agree that I am not carrying any prohibited material like mobile phones, bluetooth devices, or notes.
+                </label>
             </div>
 
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center pb-8">
                 <button 
                     onClick={() => setShowUpload(true)}
                     className="text-gray-500 hover:text-blue-600 text-sm font-medium underline"
@@ -115,7 +125,13 @@ function App() {
 
                 <button 
                     onClick={() => setHasStarted(true)}
-                    className="bg-blue-600 text-white px-8 py-3 rounded font-bold hover:bg-blue-700 shadow-lg w-full md:w-auto"
+                    disabled={!isChecked}
+                    className={`
+                      px-8 py-3 rounded font-bold shadow-lg w-full md:w-auto transition-all
+                      ${isChecked 
+                        ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer' 
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'}
+                    `}
                 >
                     I am ready to begin
                 </button>
