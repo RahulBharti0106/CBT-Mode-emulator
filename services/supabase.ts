@@ -1,12 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 
-// The environment variables are loaded from the .env file automatically by the build tool (e.g., Vite/React Scripts)
-// Ensure your .env file has:
-// SUPABASE_URL=...
-// SUPABASE_ANON_KEY=...
+// Helper to safely get environment variables (works with Vite import.meta.env or standard process.env)
+const getEnv = (key: string) => {
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    // @ts-ignore
+    return import.meta.env[key] || import.meta.env[`VITE_${key}`];
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env[key];
+  }
+  return '';
+};
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabaseUrl = getEnv('SUPABASE_URL');
+const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY');
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Supabase URL or Key missing. Database features will not work correctly.');

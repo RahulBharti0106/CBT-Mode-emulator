@@ -5,9 +5,28 @@ import { v4 as uuidv4 } from 'uuid';
 // We use the 2.5 flash model for efficient multimodal document parsing
 const MODEL_NAME = "gemini-2.5-flash-latest";
 
+// Helper to safely get environment variables
+const getEnv = (key: string) => {
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    // @ts-ignore
+    return import.meta.env[key] || import.meta.env[`VITE_${key}`];
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env[key];
+  }
+  return '';
+};
+
 export async function parsePdfToExam(base64Pdf: string): Promise<Exam> {
+  const apiKey = getEnv('API_KEY');
+  
+  if (!apiKey) {
+    throw new Error("API_KEY is missing in environment variables.");
+  }
+
   // 1. Initialize Gemini
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: apiKey });
 
   // 2. Define Schema for strict JSON output
   // We ask for a flat list of questions with metadata, then restructure in code to match Exam interface
