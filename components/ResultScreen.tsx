@@ -167,7 +167,7 @@ const ResultScreen: React.FC<Props> = ({ exam, result, saveStatus, onBack }) => 
       <div className="min-h-screen bg-gray-100 flex flex-col">
         {/* Navbar */}
         <div className="bg-white shadow-sm sticky top-0 z-10 px-4 py-3 flex justify-between items-center">
-            <h2 className="font-bold text-gray-800">Detailed Analysis</h2>
+            <h2 className="font-bold text-gray-800">Score Analysis</h2>
             <button onClick={() => setShowAnalysis(false)} className="text-blue-600 font-medium hover:underline">
                 &larr; Back to Scorecard
             </button>
