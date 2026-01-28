@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import LandingPage from './components/LandingPage';
 import ExamScreen from './components/ExamScreen';
+import ResultScreen from './components/ResultScreen';
 import { MOCK_EXAM } from './services/mockData';
 import { ExamState, Exam, QuestionType } from './types';
 import { supabase } from './services/supabase';
@@ -15,18 +16,14 @@ function App() {
   const [result, setResult] = useState<ExamState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [calculatedScore, setCalculatedScore] = useState<{score: number, correct: number, incorrect: number} | null>(null);
 
   // Logic to handle exam selection from landing page
   const handleSelectExam = (examId: string) => {
-    // In a real app, you would fetch the specific JSON for 'examId'.
-    // Since we only have one mock exam data right now, we map the available ID to our MOCK_EXAM object.
     if (examId === 'jee-main-2025-jan-22-s1') {
       setActiveExam(MOCK_EXAM);
       setView('INSTRUCTIONS');
-      setIsChecked(false); // Reset instruction checkbox
+      setIsChecked(false); 
     } else {
-      // Should not be reachable given UI logic, but good safety
       alert("This exam content is not yet loaded.");
     }
   };
@@ -39,7 +36,6 @@ function App() {
   const handleBackToHome = () => {
     setResult(null);
     setActiveExam(null);
-    setCalculatedScore(null);
     setSaveStatus('idle');
     setView('LANDING');
   };
@@ -55,7 +51,7 @@ function App() {
   const calculateAndSave = async (examState: ExamState, exam: Exam) => {
     setIsSaving(true);
     
-    // 1. Calculate Score
+    // 1. Calculate Score for DB
     let correct = 0;
     let incorrect = 0;
     let score = 0;
@@ -96,8 +92,6 @@ function App() {
         }
     });
 
-    setCalculatedScore({ score, correct, incorrect });
-
     // 2. Save to Supabase
     try {
         const { error } = await supabase
@@ -134,68 +128,14 @@ function App() {
     return <LandingPage onSelectExam={handleSelectExam} />;
   }
 
-  if (view === 'RESULT') {
-    const attempted = result ? Object.values(result.responses).filter(r => r.status === 'ANSWERED' || r.status === 'ANSWERED_MARKED_FOR_REVIEW').length : 0;
-    
+  if (view === 'RESULT' && activeExam && result) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
-          <h1 className="text-3xl font-bold text-gray-800 mb-4">Exam Submitted</h1>
-          <div className="mb-6 text-gray-600">
-            Thank you for taking the JEE (Main) mock test.
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4 mb-6 text-left">
-             <div className="bg-gray-100 p-3 rounded">
-                <div className="text-xs text-gray-500">Status</div>
-                <div className="font-bold text-green-600">Submitted</div>
-             </div>
-             <div className="bg-gray-100 p-3 rounded">
-                <div className="text-xs text-gray-500">Attempted</div>
-                <div className="font-bold">{attempted}</div>
-             </div>
-          </div>
-
-          {calculatedScore && (
-              <div className="bg-blue-50 border border-blue-100 p-4 rounded mb-6">
-                <div className="text-center mb-2 font-medium text-blue-800">Score Summary</div>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                    <div>
-                        <div className="text-xl font-bold text-green-600">{calculatedScore.correct}</div>
-                        <div className="text-xs text-gray-500">Correct</div>
-                    </div>
-                    <div>
-                        <div className="text-xl font-bold text-red-500">{calculatedScore.incorrect}</div>
-                        <div className="text-xs text-gray-500">Incorrect</div>
-                    </div>
-                    <div>
-                        <div className="text-xl font-bold text-blue-700">{calculatedScore.score}</div>
-                        <div className="text-xs text-gray-500">Total Score</div>
-                    </div>
-                </div>
-              </div>
-          )}
-
-          {/* Saving Status */}
-          <div className="mb-6">
-            {isSaving && <div className="text-blue-500 text-sm animate-pulse">Saving results to database...</div>}
-            {saveStatus === 'success' && <div className="text-green-600 text-sm font-medium">Results saved successfully to Supabase!</div>}
-            {saveStatus === 'error' && (
-                <div className="text-red-500 text-sm">
-                    Failed to save results. Check console for table schema errors.<br/>
-                    (Ensure table 'exam_results' exists)
-                </div>
-            )}
-          </div>
-
-          <button 
-            onClick={handleBackToHome}
-            className="w-full bg-blue-600 text-white py-3 rounded font-bold hover:bg-blue-700 transition"
-          >
-            Back to Home
-          </button>
-        </div>
-      </div>
+      <ResultScreen 
+        exam={activeExam}
+        result={result}
+        saveStatus={saveStatus}
+        onBack={handleBackToHome}
+      />
     );
   }
 
