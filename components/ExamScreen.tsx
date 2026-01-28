@@ -213,7 +213,7 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish }) => {
 
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-gray-100">
+    <div className="flex flex-col h-screen w-full bg-gray-100 fixed inset-0 overflow-hidden select-none">
       {/* HEADER */}
       <header className="bg-black text-white h-16 flex items-center justify-between px-4 sticky top-0 z-50">
         <div className="font-bold text-lg">JEE (Main) Mock Test</div>
