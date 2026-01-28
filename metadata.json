@@ -1,0 +1,5 @@
+{
+  "name": "JEE Main CBT Simulator",
+  "description": "A precise replica of the NTA JEE (Main) Computer Based Test interface with Physics, Chemistry, and Mathematics sections, timer logic, and question palette.",
+  "requestFramePermissions": []
+}
