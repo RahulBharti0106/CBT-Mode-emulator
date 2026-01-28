@@ -1,12 +1,15 @@
 import React, { useState, useMemo } from 'react';
+import { supabase } from '../services/supabase';
 import { EXAM_REGISTRY } from '../services/mockData';
 import { ExamMetadata, ExamType } from '../types';
 
 interface Props {
   onSelectExam: (examId: string) => void;
+  onBackToDashboard: () => void;
+  user?: any;
 }
 
-const LandingPage: React.FC<Props> = ({ onSelectExam }) => {
+const LandingPage: React.FC<Props> = ({ onSelectExam, onBackToDashboard, user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<ExamType | 'ALL'>('ALL');
   const [selectedYear, setSelectedYear] = useState<number | 'ALL'>('ALL');
@@ -23,20 +26,29 @@ const LandingPage: React.FC<Props> = ({ onSelectExam }) => {
   // Unique years for filter
   const years = Array.from(new Set(EXAM_REGISTRY.map(e => e.year))).sort((a, b) => b - a);
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Navbar */}
       <nav className="bg-blue-900 text-white shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 cursor-pointer" onClick={onBackToDashboard}>
               <span className="text-2xl font-bold tracking-tight">NTA Simulator</span>
               <span className="bg-blue-800 text-xs px-2 py-1 rounded text-blue-200 border border-blue-700">Beta</span>
             </div>
-            <div className="hidden md:flex space-x-6 text-sm font-medium">
-              <a href="#exams" className="hover:text-blue-300 transition">Exams</a>
-              <a href="#about" className="hover:text-blue-300 transition">About</a>
-              <a href="#policies" className="hover:text-blue-300 transition">Policies</a>
+            <div className="flex items-center space-x-6 text-sm font-medium">
+              <button onClick={onBackToDashboard} className="hover:text-blue-300 transition">Dashboard</button>
+              <a href="#about" className="hidden md:block hover:text-blue-300 transition">About</a>
+              {user && (
+                  <div className="flex items-center gap-4 border-l border-blue-700 pl-4">
+                      <span className="text-blue-200 hidden md:block">Hi, {user.user_metadata?.full_name?.split(' ')[0] || 'Student'}</span>
+                      <button onClick={handleSignOut} className="bg-blue-800 hover:bg-blue-700 px-3 py-1 rounded text-xs">Sign Out</button>
+                  </div>
+              )}
             </div>
           </div>
         </div>
@@ -168,10 +180,6 @@ const LandingPage: React.FC<Props> = ({ onSelectExam }) => {
           <div id="about">
              <h4 className="font-bold text-gray-900 mb-3">About Us</h4>
              <p className="text-gray-500">
-               {/* 
-                  Add your "About Us" content here. 
-                  Example: "We provide the most accurate NTA exam simulation..." 
-               */}
                The most precise NTA exam simulator available for free. Built to help students achieve their dreams by providing a realistic testing environment.
              </p>
           </div>
@@ -179,7 +187,6 @@ const LandingPage: React.FC<Props> = ({ onSelectExam }) => {
           <div id="policies">
              <h4 className="font-bold text-gray-900 mb-3">Policies</h4>
              <ul className="space-y-2 text-gray-500">
-                {/* Add your policy links here */}
                 <li><a href="#" className="hover:underline">Privacy Policy</a></li>
                 <li><a href="#" className="hover:underline">Cookie Policy</a></li>
                 <li><a href="#" className="hover:underline">Data Usage</a></li>
@@ -189,7 +196,6 @@ const LandingPage: React.FC<Props> = ({ onSelectExam }) => {
           <div id="terms">
              <h4 className="font-bold text-gray-900 mb-3">Terms & Conditions</h4>
              <p className="text-gray-500">
-                {/* Add terms here */}
                 By using this platform, you agree to our terms of service. This is a simulation tool for educational purposes.
              </p>
           </div>

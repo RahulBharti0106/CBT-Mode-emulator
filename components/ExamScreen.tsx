@@ -7,9 +7,10 @@ import Timer from './Timer';
 interface Props {
   exam: Exam;
   onFinish: (state: ExamState) => void;
+  userName?: string;
 }
 
-const ExamScreen: React.FC<Props> = ({ exam, onFinish }) => {
+const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous User" }) => {
   // --- STATE ---
   const [currentSubjectId, setCurrentSubjectId] = useState<string>(exam.subjects[0].id);
   const [currentQuestionId, setCurrentQuestionId] = useState<string>(
@@ -220,10 +221,10 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish }) => {
         <div className="flex items-center space-x-4">
             <div className="hidden md:block text-right">
                 <div className="text-sm text-gray-300">Candidate Name</div>
-                <div className="font-bold">Anonymous User</div>
+                <div className="font-bold">{userName}</div>
             </div>
-            <div className="h-10 w-10 bg-gray-600 rounded-full flex items-center justify-center">
-                User
+            <div className="h-10 w-10 bg-gray-600 rounded-full flex items-center justify-center font-bold text-white uppercase">
+                {userName.charAt(0)}
             </div>
         </div>
       </header>
@@ -356,9 +357,11 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish }) => {
             
             {/* User Details Mini */}
             <div className="p-4 bg-white border-b flex items-center gap-3">
-                <div className="h-12 w-12 bg-gray-200 rounded-full flex-shrink-0" />
+                <div className="h-12 w-12 bg-gray-200 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-gray-600">
+                    {userName.charAt(0)}
+                </div>
                 <div className="overflow-hidden">
-                    <div className="font-bold truncate">Anonymous User</div>
+                    <div className="font-bold truncate" title={userName}>{userName}</div>
                     <div className="text-xs text-gray-500">Language: English</div>
                 </div>
             </div>

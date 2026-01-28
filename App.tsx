@@ -2,14 +2,17 @@ import React, { useState, useEffect } from 'react';
 import LandingPage from './components/LandingPage';
 import ExamScreen from './components/ExamScreen';
 import ResultScreen from './components/ResultScreen';
+import AuthScreen from './components/AuthScreen';
+import Dashboard from './components/Dashboard';
 import { MOCK_EXAM } from './services/mockData';
 import { ExamState, Exam, QuestionType } from './types';
 import { supabase } from './services/supabase';
 
-type ViewState = 'LANDING' | 'INSTRUCTIONS' | 'EXAM' | 'RESULT';
+type ViewState = 'AUTH' | 'DASHBOARD' | 'LANDING' | 'INSTRUCTIONS' | 'EXAM' | 'RESULT';
 
 function App() {
-  const [view, setView] = useState<ViewState>('LANDING');
+  const [session, setSession] = useState<any>(null);
+  const [view, setView] = useState<ViewState>('AUTH');
   const [activeExam, setActiveExam] = useState<Exam | null>(null);
   
   const [isChecked, setIsChecked] = useState(false);
@@ -17,7 +20,29 @@ function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
-  // Logic to handle exam selection from landing page
+  // Auth Listener
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) setView('DASHBOARD');
+      else setView('AUTH');
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+         // If coming from login, go to dashboard. But if already in exam/result, stay there.
+         setView(prev => prev === 'AUTH' ? 'DASHBOARD' : prev);
+      } else {
+         setView('AUTH');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   const handleSelectExam = (examId: string) => {
     if (examId === 'jee-main-2025-jan-22-s1') {
       setActiveExam(MOCK_EXAM);
@@ -33,22 +58,48 @@ function App() {
     setView('RESULT');
   };
 
-  const handleBackToHome = () => {
+  const handleBackToDashboard = () => {
     setResult(null);
     setActiveExam(null);
     setSaveStatus('idle');
-    setView('LANDING');
+    setView('DASHBOARD');
+  };
+
+  const handleViewAnalysis = (attempt: any) => {
+    // Reconstruct ExamState and Exam from the DB record
+    // 1. Get Exam Data (Snapshot)
+    const examSnapshot = attempt.exam_snapshot as Exam;
+    
+    // 2. Get Responses
+    const responses = attempt.details;
+
+    // 3. Construct ExamState
+    const state: ExamState = {
+        currentSubjectId: examSnapshot.subjects[0].id,
+        currentQuestionId: examSnapshot.subjects[0].sections[0].questions[0].id,
+        responses: responses,
+        timeLeftSeconds: 0,
+        isSubmitModalOpen: false,
+        examStatus: 'SUBMITTED'
+    };
+
+    setActiveExam(examSnapshot);
+    setResult(state);
+    setSaveStatus('success'); // It's already saved
+    setView('RESULT');
   };
 
   // Logic to save results to Supabase when exam is finished
   useEffect(() => {
-    if (view === 'RESULT' && result && result.examStatus === 'SUBMITTED' && saveStatus === 'idle' && activeExam) {
+    if (view === 'RESULT' && result && result.examStatus === 'SUBMITTED' && saveStatus === 'idle' && activeExam && session) {
       calculateAndSave(result, activeExam);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, result]);
+  }, [view, result, session]);
 
   const calculateAndSave = async (examState: ExamState, exam: Exam) => {
+    if (!session?.user) return;
+
     setIsSaving(true);
     
     // 1. Calculate Score for DB
@@ -98,12 +149,15 @@ function App() {
             .from('exam_results')
             .insert([
                 {
+                    user_id: session.user.id,
+                    exam_id: exam.id,
                     exam_name: exam.name,
                     score: score,
                     correct_answers: correct,
                     incorrect_answers: incorrect,
                     total_questions: qMap.size,
                     details: examState.responses,
+                    exam_snapshot: exam, // CRITICAL: Save full exam structure so we can render scorecard later even if files change
                     created_at: new Date().toISOString()
                 }
             ]);
@@ -124,8 +178,28 @@ function App() {
 
   // --- RENDER VIEWS ---
 
+  if (view === 'AUTH') {
+      return <AuthScreen />;
+  }
+
+  if (view === 'DASHBOARD' && session) {
+      return (
+        <Dashboard 
+            user={session.user} 
+            onStartExam={() => setView('LANDING')} 
+            onViewAnalysis={handleViewAnalysis}
+        />
+      );
+  }
+
   if (view === 'LANDING') {
-    return <LandingPage onSelectExam={handleSelectExam} />;
+    return (
+        <LandingPage 
+            onSelectExam={handleSelectExam} 
+            onBackToDashboard={() => setView('DASHBOARD')}
+            user={session?.user}
+        />
+    );
   }
 
   if (view === 'RESULT' && activeExam && result) {
@@ -134,7 +208,7 @@ function App() {
         exam={activeExam}
         result={result}
         saveStatus={saveStatus}
-        onBack={handleBackToHome}
+        onBack={handleBackToDashboard}
       />
     );
   }
@@ -146,7 +220,7 @@ function App() {
          <header className="bg-blue-900 text-white p-4 sticky top-0 z-10 shadow-md flex justify-between items-center">
             <h1 className="text-xl font-bold">NTA Mock Test Simulator</h1>
             <button 
-              onClick={handleBackToHome}
+              onClick={handleBackToDashboard}
               className="text-xs bg-blue-800 hover:bg-blue-700 px-3 py-1 rounded"
             >
               Cancel
@@ -218,7 +292,14 @@ function App() {
   }
 
   if (view === 'EXAM' && activeExam) {
-    return <ExamScreen key={activeExam.id} exam={activeExam} onFinish={handleFinishExam} />;
+    return (
+        <ExamScreen 
+            key={activeExam.id} 
+            exam={activeExam} 
+            onFinish={handleFinishExam}
+            userName={session?.user?.user_metadata?.full_name || "Student"} 
+        />
+    );
   }
 
   // Fallback
