@@ -57,7 +57,7 @@ const AdminUpload: React.FC<Props> = ({ onExamLoaded, onCancel }) => {
       const loadedPdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
       setPdfDoc(loadedPdf);
 
-      // Convert to Base64 for Gemini
+      // Convert to Base64 for AI Extraction
       const base64String = await toBase64(file);
       const extractedExam = await parsePdfToExam(base64String);
       setExamData(extractedExam);
@@ -236,7 +236,7 @@ const AdminUpload: React.FC<Props> = ({ onExamLoaded, onCancel }) => {
         <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full">
             <h2 className="text-2xl font-bold mb-4 text-gray-800">Upload Exam PDF</h2>
             <p className="text-gray-600 mb-6 text-sm">
-            Select a JEE Main question paper PDF. The system will extract questions and allow you to crop diagrams.
+            Select a JEE Main question paper PDF. The system will use Artificial Intelligence (via OpenRouter) to extract questions.
             </p>
 
             {error && (

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Exam, ExamState, QuestionType, QuestionStatus } from '../types';
+import { Exam, ExamState, QuestionType, QuestionStatus, Question } from '../types';
 import MathRenderer from './MathRenderer';
+import { explainQuestionWithAI } from '../services/geminiService';
 
 interface Props {
   exam: Exam;
@@ -12,6 +13,11 @@ interface Props {
 const ResultScreen: React.FC<Props> = ({ exam, result, saveStatus, onBack }) => {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
+  
+  // AI State
+  const [aiExplanation, setAiExplanation] = useState<string | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [explainingQuestionId, setExplainingQuestionId] = useState<string | null>(null);
 
   // --- STATISTICS CALCULATION ---
   const stats = useMemo(() => {
@@ -105,16 +111,69 @@ const ResultScreen: React.FC<Props> = ({ exam, result, saveStatus, onBack }) => 
     return `${mins}m ${secs}s`;
   };
 
+  // --- AI HANDLER ---
+  const handleAskAI = async (question: Question, userVal: string) => {
+    if (isAiLoading) return;
+    setExplainingQuestionId(question.id);
+    setIsAiLoading(true);
+    setAiExplanation(null);
+    
+    // Find readable user answer text
+    let readableUserAns = userVal;
+    if (question.type === QuestionType.MCQ && userVal) {
+        const opt = question.options?.find(o => o.id === userVal);
+        if (opt) readableUserAns = opt.text;
+    }
+
+    try {
+        const text = await explainQuestionWithAI(question, readableUserAns);
+        setAiExplanation(text);
+    } catch (e) {
+        setAiExplanation("Failed to get explanation.");
+    } finally {
+        setIsAiLoading(false);
+    }
+  };
+
   // --- RENDER HELPERS ---
 
   const renderSolution = (item: any) => {
     const { question } = item;
+    const isThisExplaining = explainingQuestionId === question.id;
     
     return (
       <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 text-left">
-        <div className="mb-2 font-bold text-gray-700 text-sm">Question:</div>
+        <div className="flex justify-between items-start mb-2">
+            <div className="font-bold text-gray-700 text-sm">Question:</div>
+            <button 
+                onClick={(e) => { e.stopPropagation(); handleAskAI(question, item.userVal); }}
+                className="flex items-center gap-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-xs px-3 py-1.5 rounded-full font-bold shadow hover:opacity-90 transition-opacity"
+            >
+                {isAiLoading && isThisExplaining ? (
+                    <>
+                        <svg className="animate-spin h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        Thinking...
+                    </>
+                ) : (
+                    <>
+                        <span>✨</span> Ask AI Tutor
+                    </>
+                )}
+            </button>
+        </div>
+        
         <MathRenderer text={question.text} className="mb-4 text-gray-800" />
         
+        {/* AI Explanation Box */}
+        {isThisExplaining && aiExplanation && (
+            <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded text-sm text-gray-800 animate-fadeIn">
+                <div className="font-bold text-purple-700 mb-2 flex items-center gap-2">
+                    <span>🤖</span> AI Explanation
+                </div>
+                <MathRenderer text={aiExplanation} />
+            </div>
+        )}
+
         {question.type === QuestionType.MCQ ? (
           <div className="space-y-2">
             {question.options.map((opt: any, idx: number) => {
