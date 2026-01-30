@@ -13,11 +13,15 @@ interface Props {
 
 const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous User" }) => {
   // --- ACCESSIBILITY STATE ---
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
   const [fontSize, setFontSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [highContrast, setHighContrast] = useState(false);
-  const [cursorSize, setCursorSize] = useState<'normal' | 'large' | 'xl'>('normal');
-  const [showCursorTrail, setShowCursorTrail] = useState(false);
+  const [cursorSize, setCursorSize] = useState<'small' | 'medium' | 'large'>('small');
+  const [isMagnifierActive, setIsMagnifierActive] = useState(false);
   
+  // --- REFS ---
+  const questionContainerRef = useRef<HTMLDivElement>(null);
+
   // --- EXAM STATE ---
   const [currentSubjectId, setCurrentSubjectId] = useState<string>(exam.subjects[0].id);
   const [currentQuestionId, setCurrentQuestionId] = useState<string>(
@@ -79,7 +83,6 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
          else if (r.status === QuestionStatus.ANSWERED_MARKED_FOR_REVIEW) ansMarked++;
      });
      
-     // Note: In strict NTA, the counts are usually for the CURRENT section/subject only.
      return { answered, notAnswered, notVisited, marked, ansMarked };
   }, [responses, currentSubjectQuestions]);
 
@@ -114,20 +117,6 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
     });
   }, [currentQuestionId]);
 
-  // Cursor Trail Effect
-  const cursorRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-      if (!showCursorTrail) return;
-      const handleMove = (e: MouseEvent) => {
-          if (cursorRef.current) {
-              cursorRef.current.style.left = `${e.clientX}px`;
-              cursorRef.current.style.top = `${e.clientY}px`;
-          }
-      };
-      window.addEventListener('mousemove', handleMove);
-      return () => window.removeEventListener('mousemove', handleMove);
-  }, [showCursorTrail]);
-
   // --- HANDLERS ---
 
   const handleOptionSelect = (optId: string) => {
@@ -143,7 +132,6 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
   const handleNumericInput = (val: string) => {
     setResponses(prev => {
         const currVal = prev[currentQuestionId]?.numericAnswer || '';
-        // Prevent multiple decimals
         if (val === '.' && currVal.includes('.')) return prev;
         return {
             ...prev,
@@ -180,7 +168,6 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
 
   const handleManualNumericChange = (e: React.ChangeEvent<HTMLInputElement>) => {
        const val = e.target.value;
-       // Allow typing but typically exams restrict to numbers only
        if (!/^[0-9.]*$/.test(val)) return;
        setResponses(prev => ({
         ...prev,
@@ -267,6 +254,12 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
     });
   };
 
+  const handleScrollDown = () => {
+    if (questionContainerRef.current) {
+        questionContainerRef.current.scrollBy({ top: 150, behavior: 'smooth' });
+    }
+  };
+
   // --- STYLING HELPERS ---
   const getContentStyle = () => {
       let fontSizeClass = 'text-base';
@@ -277,8 +270,8 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
   };
 
   const getCursorClass = () => {
-      if (cursorSize === 'large') return 'cursor-pointer-large'; // Define in CSS
-      if (cursorSize === 'xl') return 'cursor-pointer-xl';
+      if (cursorSize === 'medium') return 'cursor-pointer-medium';
+      if (cursorSize === 'large') return 'cursor-pointer-large';
       return 'cursor-auto';
   };
 
@@ -287,51 +280,144 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
       
       {/* GLOBAL STYLES FOR DYNAMIC CURSOR/THEME */}
       <style>{`
-         .cursor-pointer-large { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="black" stroke="white"><path d="M5.5 3.21l10.08 5.61-3.66 1.34 2.8 6.67-2.3 1-2.8-6.67-3.46 2.66z"/></svg>'), auto !important; }
-         .cursor-pointer-xl { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="black" stroke="white"><path d="M5.5 3.21l10.08 5.61-3.66 1.34 2.8 6.67-2.3 1-2.8-6.67-3.46 2.66z"/></svg>'), auto !important; }
+         .cursor-pointer-medium { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="black" stroke="white"><path d="M5.5 3.21l10.08 5.61-3.66 1.34 2.8 6.67-2.3 1-2.8-6.67-3.46 2.66z"/></svg>'), auto !important; }
+         .cursor-pointer-large { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="black" stroke="white"><path d="M5.5 3.21l10.08 5.61-3.66 1.34 2.8 6.67-2.3 1-2.8-6.67-3.46 2.66z"/></svg>'), auto !important; }
       `}</style>
 
-      {/* CURSOR TRAIL */}
-      {showCursorTrail && (
-          <div ref={cursorRef} className="fixed w-6 h-6 rounded-full bg-yellow-400 opacity-50 pointer-events-none z-[100] transform -translate-x-1/2 -translate-y-1/2 mix-blend-multiply" />
-      )}
-
       {/* HEADER - BLACK STRIP */}
-      <header className={`h-14 flex items-center justify-between px-4 z-50 ${highContrast ? 'bg-gray-800 border-b border-gray-600' : 'bg-black text-white'}`}>
-         <div className="font-bold text-lg tracking-wide">
+      <header className={`h-12 flex items-center justify-between px-2 z-50 ${highContrast ? 'bg-gray-800 border-b border-gray-600' : 'bg-black text-white'}`}>
+         <div className="flex items-center gap-2">
+             {/* Accessibility Button */}
+             <button 
+                onClick={() => setIsAccessModalOpen(true)}
+                className="flex items-center gap-1 bg-[#333] hover:bg-[#444] text-white px-2 py-1 rounded text-xs border border-gray-600"
+             >
+                 <div className="w-5 h-5 bg-green-600 rounded-full flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                 </div>
+                 <span className="font-semibold">Accessibility</span>
+             </button>
+
+             {/* Screen Magnifier Button */}
+             <button 
+                onClick={() => setIsMagnifierActive(!isMagnifierActive)}
+                className={`hidden sm:flex items-center gap-1 px-2 py-1 rounded text-xs border border-gray-600 transition-colors ${isMagnifierActive ? 'bg-orange-600 text-white border-orange-500' : 'bg-[#333] hover:bg-[#444] text-white opacity-90'}`}
+                title={isMagnifierActive ? "Disable Screen Magnifier" : "Enable Screen Magnifier"}
+             >
+                 <div className={`w-5 h-5 rounded-full flex items-center justify-center ${isMagnifierActive ? 'bg-white' : 'bg-orange-500'}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 ${isMagnifierActive ? 'text-orange-600' : 'text-white'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                 </div>
+                 <span className="font-semibold">Screen Magnifier</span>
+             </button>
+         </div>
+
+         {/* Center Title (Optional, NTA usually keeps it minimal or shows exam name) */}
+         <div className="font-bold text-sm tracking-wide hidden md:block">
              JEE (Main) Mock Test
          </div>
          
-         {/* ACCESSIBILITY CONTROLS */}
-         <div className="flex items-center gap-4">
-             {/* Font Size */}
-             <div className="hidden md:flex items-center bg-gray-700 rounded px-2 py-1 gap-1">
-                 <button onClick={() => setFontSize('small')} className={`text-xs px-2 py-0.5 rounded ${fontSize === 'small' ? 'bg-blue-500 text-white' : 'text-gray-300'}`}>A-</button>
-                 <button onClick={() => setFontSize('medium')} className={`text-sm px-2 py-0.5 rounded ${fontSize === 'medium' ? 'bg-blue-500 text-white' : 'text-gray-300'}`}>A</button>
-                 <button onClick={() => setFontSize('large')} className={`text-lg px-2 py-0.5 rounded ${fontSize === 'large' ? 'bg-blue-500 text-white' : 'text-gray-300'}`}>A+</button>
-             </div>
-
-             {/* Theme Toggle */}
-             <button 
-                onClick={() => setHighContrast(!highContrast)} 
-                className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-white border border-gray-600"
-                title="Toggle High Contrast"
-             >
-                 {highContrast ? '☀ Light' : '☾ Dark'}
-             </button>
-
-             {/* Cursor Controls */}
-             <div className="hidden lg:flex items-center bg-gray-700 rounded px-2 py-1 gap-1">
-                 <span className="text-xs text-gray-400 mr-1">Cursor:</span>
-                 <button onClick={() => setCursorSize(cursorSize === 'normal' ? 'large' : cursorSize === 'large' ? 'xl' : 'normal')} className="text-white hover:text-blue-300 text-sm px-1">
-                    Size
-                 </button>
-                 <button onClick={() => setShowCursorTrail(!showCursorTrail)} className={`text-xs px-2 py-0.5 rounded ml-1 ${showCursorTrail ? 'bg-green-600' : 'bg-gray-600'}`}>
-                    Trail
-                 </button>
-             </div>
+         {/* Right Side Info */}
+         <div className="hidden md:flex items-center gap-4">
+             {/* Candidate Name placeholder */}
          </div>
       </header>
+
+      {/* ACCESSIBILITY MODAL */}
+      {isAccessModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className={`w-[500px] rounded-lg shadow-2xl overflow-hidden border ${highContrast ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-200 text-gray-800'}`}>
+                {/* Modal Header */}
+                <div className="bg-[#333] text-white px-4 py-2 flex justify-between items-center border-b border-gray-500">
+                    <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                        </div>
+                        <h3 className="font-bold text-sm">Accessibility Adjustments</h3>
+                    </div>
+                    
+                    <button onClick={() => setIsAccessModalOpen(false)} className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-2 py-1 rounded">
+                        X
+                    </button>
+                </div>
+                
+                <div className="p-6 grid grid-cols-2 gap-4">
+                    
+                    {/* Dark Mode */}
+                    <div className={`border rounded p-4 flex flex-col items-center justify-between h-32 ${highContrast ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-white'}`}>
+                        <span className="font-bold text-sm text-center">Switch to <br/> Dark Mode</span>
+                        <div 
+                            onClick={() => setHighContrast(!highContrast)}
+                            className={`w-14 h-7 rounded-full p-1 cursor-pointer transition-colors relative flex items-center ${highContrast ? 'bg-blue-600' : 'bg-gray-300'}`}
+                        >
+                            <div className={`bg-white h-5 w-5 rounded-full shadow-md transform transition-transform absolute ${highContrast ? 'translate-x-7' : 'translate-x-0'}`}></div>
+                            <span className="absolute left-1.5 text-[10px] text-white font-bold opacity-0">ON</span>
+                            <span className="absolute right-1.5 text-[10px] text-gray-500 font-bold opacity-0">OFF</span>
+                        </div>
+                    </div>
+
+                    {/* Font Size */}
+                    <div className={`border rounded p-4 flex flex-col items-center justify-between h-32 ${highContrast ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-white'}`}>
+                        <span className="font-bold text-sm">Select Font Size</span>
+                        <div className="flex gap-4 items-end mb-2">
+                             <button 
+                                onClick={() => setFontSize('small')}
+                                className={`text-sm font-bold transition-colors px-2 rounded ${fontSize === 'small' ? 'bg-blue-100 text-blue-800 ring-2 ring-blue-500' : 'text-gray-500'}`}
+                             >
+                                 A
+                             </button>
+                             <button 
+                                onClick={() => setFontSize('medium')}
+                                className={`text-lg font-bold transition-colors px-2 rounded ${fontSize === 'medium' ? 'bg-blue-100 text-blue-800 ring-2 ring-blue-500' : 'text-gray-500'}`}
+                             >
+                                 A
+                             </button>
+                             <button 
+                                onClick={() => setFontSize('large')}
+                                className={`text-2xl font-bold transition-colors px-2 rounded ${fontSize === 'large' ? 'bg-blue-100 text-blue-800 ring-2 ring-blue-500' : 'text-gray-500'}`}
+                             >
+                                 A
+                             </button>
+                        </div>
+                    </div>
+
+                    {/* Cursor Size - Spanning Full Width to balance layout or keep separate */}
+                    <div className={`border rounded p-4 flex flex-col items-center justify-between h-32 col-span-2 ${highContrast ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-white'}`}>
+                        <span className="font-bold text-sm">Choose Cursor Size</span>
+                        <div className="flex gap-8 items-center mb-2">
+                             <button 
+                                onClick={() => setCursorSize('small')}
+                                className={`p-2 rounded transition-colors ${cursorSize === 'small' ? 'bg-blue-100 ring-2 ring-blue-500' : 'hover:bg-gray-100'}`}
+                                title="Small Cursor"
+                             >
+                                 <svg className="w-4 h-4 text-black transform -rotate-12" fill="currentColor" viewBox="0 0 24 24"><path d="M5.5 3.21l10.08 5.61-3.66 1.34 2.8 6.67-2.3 1-2.8-6.67-3.46 2.66z"/></svg>
+                             </button>
+                             <button 
+                                onClick={() => setCursorSize('medium')}
+                                className={`p-2 rounded transition-colors ${cursorSize === 'medium' ? 'bg-blue-100 ring-2 ring-blue-500' : 'hover:bg-gray-100'}`}
+                                title="Medium Cursor"
+                             >
+                                 <svg className="w-6 h-6 text-black transform -rotate-12" fill="currentColor" viewBox="0 0 24 24"><path d="M5.5 3.21l10.08 5.61-3.66 1.34 2.8 6.67-2.3 1-2.8-6.67-3.46 2.66z"/></svg>
+                             </button>
+                             <button 
+                                onClick={() => setCursorSize('large')}
+                                className={`p-2 rounded transition-colors ${cursorSize === 'large' ? 'bg-blue-100 ring-2 ring-blue-500' : 'hover:bg-gray-100'}`}
+                                title="Large Cursor"
+                             >
+                                 <svg className="w-9 h-9 text-black transform -rotate-12" fill="currentColor" viewBox="0 0 24 24"><path d="M5.5 3.21l10.08 5.61-3.66 1.34 2.8 6.67-2.3 1-2.8-6.67-3.46 2.66z"/></svg>
+                             </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* SUB-HEADER / SUBJECT TABS (Blue Strip) */}
       <div className={`flex justify-between items-center px-1 h-12 shadow-md ${highContrast ? 'bg-gray-900 border-b border-gray-700' : 'bg-[#3C8DBC]'}`}>
@@ -388,71 +474,80 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
             </div>
 
             {/* SCROLLABLE QUESTION CONTENT */}
-            <div className="flex-1 p-6 overflow-y-auto">
-                <div className="border-b border-gray-300 pb-6 mb-6">
-                    {/* Question Number */}
-                    <div className="flex items-start gap-4 mb-4">
-                        <div className="font-bold whitespace-nowrap pt-1">Question No. {currentQuestion.orderIndex + 1}</div>
-                        <div className="flex-1">
-                             {/* Question Image/Text */}
-                             <MathRenderer text={currentQuestion.text} className={`text-lg leading-loose font-medium ${highContrast ? 'text-gray-100' : 'text-gray-900'}`} />
+            <div ref={questionContainerRef} className="flex-1 p-6 overflow-y-auto">
+                <div style={isMagnifierActive ? { zoom: '1.4' } : {}}>
+                    <div className="border-b border-gray-300 pb-6 mb-6">
+                        {/* Question Number */}
+                        <div className="flex items-start gap-4 mb-4">
+                            <div className="font-bold whitespace-nowrap pt-1">Question No. {currentQuestion.orderIndex + 1}</div>
+                            <div className="flex-1">
+                                {/* Question Image/Text */}
+                                <MathRenderer text={currentQuestion.text} className={`text-lg leading-loose font-medium ${highContrast ? 'text-gray-100' : 'text-gray-900'}`} />
+                            </div>
+                            {/* Down Arrow for Scroll */}
+                            <button 
+                                onClick={handleScrollDown} 
+                                className="text-blue-500 text-2xl hover:bg-blue-50 rounded-full p-1 transition-colors flex-shrink-0"
+                                title="Scroll Down"
+                                aria-label="Scroll Down"
+                            >
+                                ⬇
+                            </button>
                         </div>
-                        {/* Down Arrow for Scroll (Visual Only) */}
-                        <div className="text-blue-500 text-2xl">⬇</div>
                     </div>
-                </div>
 
-                {/* OPTIONS / INPUT AREA */}
-                <div>
-                    {currentQuestion.type === QuestionType.MCQ && currentQuestion.options ? (
-                        <div className="space-y-4 max-w-3xl">
-                            {currentQuestion.options.map((opt, idx) => (
-                                <label 
-                                    key={opt.id} 
-                                    className={`flex items-start p-3 rounded cursor-pointer transition-colors border
-                                        ${highContrast 
-                                            ? (responses[currentQuestionId]?.selectedOptionId === opt.id ? 'bg-gray-700 border-yellow-400' : 'border-gray-600 hover:bg-gray-800') 
-                                            : (responses[currentQuestionId]?.selectedOptionId === opt.id ? 'bg-blue-50 border-blue-400' : 'border-gray-200 hover:bg-gray-50')
-                                        }
+                    {/* OPTIONS / INPUT AREA */}
+                    <div>
+                        {currentQuestion.type === QuestionType.MCQ && currentQuestion.options ? (
+                            <div className="space-y-4 max-w-3xl">
+                                {currentQuestion.options.map((opt, idx) => (
+                                    <label 
+                                        key={opt.id} 
+                                        className={`flex items-start p-3 rounded cursor-pointer transition-colors border
+                                            ${highContrast 
+                                                ? (responses[currentQuestionId]?.selectedOptionId === opt.id ? 'bg-gray-700 border-yellow-400' : 'border-gray-600 hover:bg-gray-800') 
+                                                : (responses[currentQuestionId]?.selectedOptionId === opt.id ? 'bg-blue-50 border-blue-400' : 'border-gray-200 hover:bg-gray-50')
+                                            }
+                                        `}
+                                    >
+                                        <div className="pt-1">
+                                            <input 
+                                                type="radio" 
+                                                name="mcq-option" 
+                                                className="h-5 w-5 accent-blue-600"
+                                                checked={responses[currentQuestionId]?.selectedOptionId === opt.id}
+                                                onChange={() => handleOptionSelect(opt.id)}
+                                            />
+                                        </div>
+                                        <div className="ml-4 flex-1">
+                                            <span className="font-bold mr-2 opacity-70">({idx + 1})</span>
+                                            <MathRenderer text={opt.text} className="inline-block align-middle" />
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="max-w-md">
+                                <label className="block text-sm font-bold mb-2">Answer:</label>
+                                <input 
+                                    type="text" 
+                                    className={`block w-full text-lg border rounded p-3 font-mono tracking-widest
+                                        ${highContrast ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300'}
                                     `}
-                                >
-                                    <div className="pt-1">
-                                        <input 
-                                            type="radio" 
-                                            name="mcq-option" 
-                                            className="h-5 w-5 accent-blue-600"
-                                            checked={responses[currentQuestionId]?.selectedOptionId === opt.id}
-                                            onChange={() => handleOptionSelect(opt.id)}
-                                        />
-                                    </div>
-                                    <div className="ml-4 flex-1">
-                                        <span className="font-bold mr-2 opacity-70">({idx + 1})</span>
-                                        <MathRenderer text={opt.text} className="inline-block align-middle" />
-                                    </div>
-                                </label>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="max-w-md">
-                            <label className="block text-sm font-bold mb-2">Answer:</label>
-                            <input 
-                                type="text" 
-                                className={`block w-full text-lg border rounded p-3 font-mono tracking-widest
-                                    ${highContrast ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300'}
-                                `}
-                                placeholder="Enter Value"
-                                value={responses[currentQuestionId]?.numericAnswer || ''}
-                                onChange={handleManualNumericChange}
-                            />
-                            
-                            {/* VIRTUAL KEYBOARD */}
-                            <VirtualKeyboard 
-                                onInput={handleNumericInput}
-                                onBackspace={handleNumericBackspace}
-                                onClear={handleNumericClear}
-                            />
-                        </div>
-                    )}
+                                    placeholder="Enter Value"
+                                    value={responses[currentQuestionId]?.numericAnswer || ''}
+                                    onChange={handleManualNumericChange}
+                                />
+                                
+                                {/* VIRTUAL KEYBOARD */}
+                                <VirtualKeyboard 
+                                    onInput={handleNumericInput}
+                                    onBackspace={handleNumericBackspace}
+                                    onClear={handleNumericClear}
+                                />
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -561,7 +656,7 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
                     questions={currentSubjectQuestions}
                     currentQuestionId={currentQuestionId}
                     responses={responses}
-                    onNavigate={moveToNextQuestion} // Bug fix: usually should be direct nav, but let's allow palette nav
+                    onNavigate={moveToNextQuestion} 
                 />
             </div>
 
