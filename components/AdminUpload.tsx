@@ -1,16 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { parsePdfToExam } from '../services/geminiService';
-import { uploadExamAsset } from '../services/supabase';
 import { Exam, Question } from '../types';
-// @ts-ignore
-import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@3.11.174';
 
-// Handle ES module import structure for PDF.js (default vs named exports)
-const pdfjs = (pdfjsLib as any).default || pdfjsLib;
-
-// Set worker source for PDF.js
-if (pdfjs.GlobalWorkerOptions) {
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
+// Using global PDF.js from CDN script in index.html to avoid worker issues
+declare global {
+  interface Window {
+    pdfjsLib: any;
+  }
 }
 
 interface Props {
@@ -35,7 +31,6 @@ const AdminUpload: React.FC<Props> = ({ onExamLoaded, onCancel }) => {
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 });
-  const [uploadingImage, setUploadingImage] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -46,6 +41,12 @@ const AdminUpload: React.FC<Props> = ({ onExamLoaded, onCancel }) => {
       return;
     }
     
+    // Check if PDF.js is loaded
+    if (!window.pdfjsLib) {
+      setError("PDF Processor library failed to load. Please refresh the page.");
+      return;
+    }
+
     setPdfFile(file);
     setLoading(true);
     setError(null);
@@ -53,8 +54,7 @@ const AdminUpload: React.FC<Props> = ({ onExamLoaded, onCancel }) => {
     try {
       // Load PDF Document for rendering later
       const arrayBuffer = await file.arrayBuffer();
-      // Use the normalized pdfjs object
-      const loadedPdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+      const loadedPdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       setPdfDoc(loadedPdf);
 
       // Convert to Base64 for AI Extraction
@@ -178,34 +178,23 @@ const AdminUpload: React.FC<Props> = ({ onExamLoaded, onCancel }) => {
             Math.abs(height)
         );
 
-        // 2. Upload to Supabase
-        setUploadingImage(true);
-        tempCanvas.toBlob(async (blob) => {
-            if (blob) {
-                try {
-                    const filename = `q-${selectedQuestionId}-${Date.now()}.png`;
-                    const url = await uploadExamAsset(blob, filename);
-                    
-                    // 3. Update Question Data
-                    const updatedSubjects = examData.subjects.map(sub => ({
-                        ...sub,
-                        sections: sub.sections.map(sec => ({
-                            ...sec,
-                            questions: sec.questions.map(q => 
-                                q.id === selectedQuestionId ? { ...q, image: url } : q
-                            )
-                        }))
-                    }));
-                    
-                    setExamData({ ...examData, subjects: updatedSubjects });
-                    setSelectedQuestionId(null); // Deselect after upload
-                } catch (err) {
-                    alert("Failed to upload image. Check Supabase 'exam-assets' bucket permissions.");
-                } finally {
-                    setUploadingImage(false);
-                }
-            }
-        }, 'image/png');
+        // 2. Convert to Base64 Data URL (Bypass Supabase Storage RLS)
+        // This embeds the image directly in the data structure, avoiding cloud storage permission issues.
+        const imageUrl = tempCanvas.toDataURL('image/png');
+
+        // 3. Update Question Data
+        const updatedSubjects = examData.subjects.map(sub => ({
+            ...sub,
+            sections: sub.sections.map(sec => ({
+                ...sec,
+                questions: sec.questions.map(q => 
+                    q.id === selectedQuestionId ? { ...q, image: imageUrl } : q
+                )
+            }))
+        }));
+        
+        setExamData({ ...examData, subjects: updatedSubjects });
+        setSelectedQuestionId(null); // Deselect after upload
     }
   };
 
@@ -236,7 +225,7 @@ const AdminUpload: React.FC<Props> = ({ onExamLoaded, onCancel }) => {
         <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full">
             <h2 className="text-2xl font-bold mb-4 text-gray-800">Upload Exam PDF</h2>
             <p className="text-gray-600 mb-6 text-sm">
-            Select a JEE Main question paper PDF. The system will use Artificial Intelligence (via OpenRouter) to extract questions.
+            Select a JEE Main question paper PDF. The system will use Artificial Intelligence to extract questions.
             </p>
 
             {error && (
@@ -292,7 +281,7 @@ const AdminUpload: React.FC<Props> = ({ onExamLoaded, onCancel }) => {
             <h2 className="font-bold text-lg">Exam Editor</h2>
             <div className="flex gap-4">
                 <span className="text-sm text-gray-500 self-center hidden md:block">
-                    {uploadingImage ? 'Uploading Diagram...' : selectedQuestionId ? 'Draw a box on the PDF to crop diagram.' : 'Select a question to add diagram.'}
+                    {selectedQuestionId ? 'Draw a box on the PDF to crop diagram.' : 'Select a question to add diagram.'}
                 </span>
                 <button 
                     onClick={handleExportJson}

@@ -1,69 +1,19 @@
 import { Exam, QuestionType, Subject, Section, Question } from "../types";
 // @ts-ignore
 import { v4 as uuidv4 } from 'https://esm.sh/uuid@^13.0.0';
+import { GoogleGenAI } from "@google/genai";
 
-// OpenRouter Configuration
-const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
-
-// --- FREE MODEL CONFIGURATION ---
-// We use Gemini 2.0 Flash Lite (Free) for PDF processing as it supports Vision and has a large context
-const DIGITIZATION_MODEL = "google/gemini-2.0-flash-lite-preview-02-05:free"; 
-// We use Gemini 2.0 Flash Thinking (Free) for tutoring as it has excellent reasoning capabilities
-const TUTOR_MODEL = "google/gemini-2.0-flash-thinking-exp:free";
-
-// Helper to safely get environment variables
-const getEnv = (key: string) => {
-  // @ts-ignore
-  if (typeof import.meta !== 'undefined' && import.meta.env) {
-    // @ts-ignore
-    return import.meta.env[key] || import.meta.env[`VITE_${key}`];
-  }
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env[key];
-  }
-  return '';
-};
-
-/**
- * Calls OpenRouter API
- */
-async function callOpenRouter(messages: any[], model: string, response_format?: any) {
-  const apiKey = getEnv('OPENROUTER_API_KEY');
-  
-  if (!apiKey || apiKey.includes('your_openrouter_key_here')) {
-    throw new Error("Missing VITE_OPENROUTER_API_KEY in .env file. Please add your OpenRouter key.");
-  }
-
-  const response = await fetch(OPENROUTER_API_URL, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "HTTP-Referer": window.location.origin, // Required by OpenRouter
-      "X-Title": "JEE CBT Simulator",
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: model,
-      messages: messages,
-      response_format: response_format,
-      temperature: 0.1 // Low temperature for factual extraction
-    })
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`OpenRouter API Error: ${err}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0].message.content;
-}
+// Use Gemini 3 Pro Preview for both digitization and tutoring for best results
+const MODEL_NAME = "gemini-3-pro-preview";
 
 /**
  * FEATURE 1: DIGITIZE EXAM
  * Parses a PDF Base64 string into a structured Exam object
  */
 export async function parsePdfToExam(base64Pdf: string): Promise<Exam> {
+  // Guidelines: API Key from process.env.API_KEY
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   const prompt = `
     You are an expert exam digitizer for JEE Main. 
     Analyze the attached PDF question paper.
@@ -91,29 +41,28 @@ export async function parsePdfToExam(base64Pdf: string): Promise<Exam> {
   `;
 
   try {
-    const content = await callOpenRouter(
-      [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            {
-              type: "image_url",
-              image_url: {
-                // OpenRouter supports passing base64 directly for Gemini models
-                url: `data:application/pdf;base64,${base64Pdf}` 
-              }
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: {
+        parts: [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType: 'application/pdf',
+              data: base64Pdf
             }
-          ]
-        }
-      ],
-      DIGITIZATION_MODEL,
-      { type: "json_object" } 
-    );
+          }
+        ]
+      },
+      config: {
+        responseMimeType: 'application/json'
+      }
+    });
 
-    // Clean up potential markdown code blocks in response
-    const cleanedText = content.replace(/```json/g, '').replace(/```/g, '').trim();
-    const rawQuestions = JSON.parse(cleanedText);
+    const text = response.text;
+    if (!text) throw new Error("Empty response from AI");
+
+    const rawQuestions = JSON.parse(text);
     
     // Handle if the AI wrapped it in a key like { "questions": [...] }
     const questionsArray = Array.isArray(rawQuestions) ? rawQuestions : (rawQuestions.questions || rawQuestions.data || []);
@@ -122,7 +71,7 @@ export async function parsePdfToExam(base64Pdf: string): Promise<Exam> {
 
   } catch (error) {
     console.error("AI Extraction Error:", error);
-    throw new Error("Failed to extract questions. Ensure your OpenRouter key is valid.");
+    throw new Error("Failed to extract questions. Please check your API Key.");
   }
 }
 
@@ -131,6 +80,8 @@ export async function parsePdfToExam(base64Pdf: string): Promise<Exam> {
  * Explains a specific question
  */
 export async function explainQuestionWithAI(question: Question, userAnswer: string | undefined): Promise<string> {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   const prompt = `
     You are a friendly and expert JEE Main tutor (Physics, Chemistry, Math).
     
@@ -151,13 +102,17 @@ export async function explainQuestionWithAI(question: Question, userAnswer: stri
   `;
 
   try {
-    return await callOpenRouter(
-      [{ role: "user", content: prompt }],
-      TUTOR_MODEL
-    );
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: prompt,
+      config: {
+        thinkingConfig: { thinkingBudget: 2048 }
+      }
+    });
+    return response.text || "No explanation generated.";
   } catch (error) {
     console.error(error);
-    return "Sorry, I couldn't connect to the AI Tutor right now. Please check your internet connection or API Key.";
+    return "Sorry, I couldn't connect to the AI Tutor right now. Please check your internet connection.";
   }
 }
 
