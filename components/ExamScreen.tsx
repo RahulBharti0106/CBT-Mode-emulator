@@ -382,9 +382,9 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
                 <div className={`font-bold text-lg ${highContrast ? 'text-yellow-400' : 'text-red-600'}`}>
                     {currentQuestion.type === QuestionType.MCQ ? 'Question Type: MCQ' : 'Question Type: Numeric'}
                 </div>
-                <div className={`text-sm font-bold ${highContrast ? 'text-green-400' : 'text-green-700'}`}>
+                {/* <div className={`text-sm font-bold ${highContrast ? 'text-green-400' : 'text-green-700'}`}>
                     Marks for correct answer: 4 | Negative Marks: 1
-                </div>
+                </div> */}
             </div>
 
             {/* SCROLLABLE QUESTION CONTENT */}
