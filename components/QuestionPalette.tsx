@@ -49,9 +49,9 @@ const QuestionPalette: React.FC<PaletteProps> = ({ questions, currentQuestionId,
   const renderStatusOverlay = (qId: string) => {
     const response = responses[qId];
     if (response?.status === QuestionStatus.ANSWERED_MARKED_FOR_REVIEW) {
-      // Small green check/dot at bottom right
+      // Small green check/dot at bottom right, positioned to overlap tightly
       return (
-        <div className="absolute -bottom-1 -right-1">
+        <div className="absolute bottom-0 right-0">
             <svg viewBox="0 0 24 24" className="w-4 h-4 text-green-500 bg-white rounded-full border border-gray-100 fill-current">
                 <path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-1.25 17.292l-4.5-4.364 1.857-1.858 2.643 2.506 5.643-5.784 1.857 1.857-7.5 7.643z"/>
             </svg>
@@ -64,7 +64,7 @@ const QuestionPalette: React.FC<PaletteProps> = ({ questions, currentQuestionId,
   return (
     <div className="grid grid-cols-4 gap-3 p-3">
       {questions.map((q, idx) => (
-        <div key={q.id} className="relative">
+        <div key={q.id} className="relative w-10 h-9 mx-auto">
             <button
             onClick={() => onNavigate(q.id)}
             className={`
