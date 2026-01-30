@@ -3,7 +3,6 @@ import { Exam, ExamState, QuestionStatus, QuestionType, Subject, Question, UserR
 import MathRenderer from './MathRenderer';
 import QuestionPalette from './QuestionPalette';
 import Timer from './Timer';
-import VirtualKeyboard from './VirtualKeyboard';
 
 interface Props {
   exam: Exam;
@@ -19,6 +18,9 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
   const [cursorSize, setCursorSize] = useState<'small' | 'medium' | 'large'>('small');
   const [isMagnifierActive, setIsMagnifierActive] = useState(false);
   
+  // --- SUBMIT MODAL STATE ---
+  const [isSubmitConfirmOpen, setIsSubmitConfirmOpen] = useState(false);
+
   // --- REFS ---
   const questionContainerRef = useRef<HTMLDivElement>(null);
 
@@ -38,6 +40,13 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
     );
     return map;
   }, [exam]);
+
+  // Track time spent per subject (initialize with 0)
+  const [subjectTimes, setSubjectTimes] = useState<Record<string, number>>(() => {
+    const initial: Record<string, number> = {};
+    exam.subjects.forEach(s => initial[s.id] = 0);
+    return initial;
+  });
 
   const [responses, setResponses] = useState<Record<string, UserResponse>>(() => {
     const initial: Record<string, UserResponse> = {};
@@ -66,7 +75,7 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
     return exam.subjects.find(s => s.id === currentSubjectId)?.sections.flatMap(s => s.questions) || [];
   }, [currentSubjectId, exam]);
 
-  // --- SUMMARY STATISTICS FOR LEGEND ---
+  // --- STATISTICS FOR LEGEND (Subject Wise) ---
   const summaryStats = useMemo(() => {
      let answered = 0;
      let notAnswered = 0;
@@ -86,22 +95,56 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
      return { answered, notAnswered, notVisited, marked, ansMarked };
   }, [responses, currentSubjectQuestions]);
 
+  // --- OVERALL STATISTICS FOR SUBMIT MODAL ---
+  const overallStats = useMemo(() => {
+      let answered = 0;
+      let notAnswered = 0;
+      let notVisited = 0;
+      let marked = 0;
+      let ansMarked = 0;
+      
+      allQuestionsMap.forEach(q => {
+           const r = responses[q.id];
+           if (!r || r.status === QuestionStatus.NOT_VISITED) notVisited++;
+           else if (r.status === QuestionStatus.ANSWERED) answered++;
+           else if (r.status === QuestionStatus.NOT_ANSWERED) notAnswered++;
+           else if (r.status === QuestionStatus.MARKED_FOR_REVIEW) marked++;
+           else if (r.status === QuestionStatus.ANSWERED_MARKED_FOR_REVIEW) ansMarked++;
+      });
+      return { answered, notAnswered, notVisited, marked, ansMarked };
+  }, [responses, allQuestionsMap]);
+
   // --- EFFECTS ---
   
-  // Timer
+  // Timer & Subject Time Tracker
   useEffect(() => {
     const timer = setInterval(() => {
+      // 1. Decrement Global Timer
       setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          handleSubmit();
           return 0;
         }
         return prev - 1;
       });
+
+      // 2. Increment Current Subject Timer
+      setSubjectTimes(prev => ({
+        ...prev,
+        [currentSubjectId]: (prev[currentSubjectId] || 0) + 1
+      }));
+
     }, 1000);
+
     return () => clearInterval(timer);
-  }, []);
+  }, [currentSubjectId]); // Re-bind when subject changes to capture correct ID in closure
+
+  // Auto-submit when time hits 0
+  useEffect(() => {
+      if (timeLeft === 0) {
+          handleSubmit();
+      }
+  }, [timeLeft]);
 
   // Update visited status
   useEffect(() => {
@@ -127,43 +170,6 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
         selectedOptionId: optId
       }
     }));
-  };
-
-  const handleNumericInput = (val: string) => {
-    setResponses(prev => {
-        const currVal = prev[currentQuestionId]?.numericAnswer || '';
-        if (val === '.' && currVal.includes('.')) return prev;
-        return {
-            ...prev,
-            [currentQuestionId]: {
-                ...prev[currentQuestionId],
-                numericAnswer: currVal + val
-            }
-        };
-    });
-  };
-
-  const handleNumericBackspace = () => {
-    setResponses(prev => {
-        const currVal = prev[currentQuestionId]?.numericAnswer || '';
-        return {
-            ...prev,
-            [currentQuestionId]: {
-                ...prev[currentQuestionId],
-                numericAnswer: currVal.slice(0, -1)
-            }
-        };
-    });
-  };
-
-  const handleNumericClear = () => {
-      setResponses(prev => ({
-          ...prev,
-          [currentQuestionId]: {
-              ...prev[currentQuestionId],
-              numericAnswer: ''
-          }
-      }));
   };
 
   const handleManualNumericChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -243,12 +249,35 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
     }
   };
 
+  const moveToPreviousQuestion = () => {
+    const allQ: Question[] = Array.from(allQuestionsMap.values());
+    const idx = allQ.findIndex(q => q.id === currentQuestionId);
+    if (idx > 0) {
+      const prevQ = allQ[idx - 1];
+      if (prevQ.subjectId !== currentSubjectId) {
+        setCurrentSubjectId(prevQ.subjectId);
+      }
+      setCurrentQuestionId(prevQ.id);
+    }
+  };
+
+  const handlePaletteNavigation = (qId: string) => {
+    const q = allQuestionsMap.get(qId);
+    if (q) {
+      if (q.subjectId !== currentSubjectId) {
+        setCurrentSubjectId(q.subjectId);
+      }
+      setCurrentQuestionId(q.id);
+    }
+  };
+
   const handleSubmit = () => {
     onFinish({
       currentSubjectId,
       currentQuestionId,
       responses,
       timeLeftSeconds: timeLeft,
+      subjectTimes,
       isSubmitModalOpen: false,
       examStatus: 'SUBMITTED'
     });
@@ -419,6 +448,70 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
         </div>
       )}
 
+      {/* CONFIRM SUBMISSION MODAL */}
+      {isSubmitConfirmOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className={`w-[500px] rounded-lg shadow-2xl overflow-hidden border ${highContrast ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}>
+                {/* Modal Header */}
+                <div className="bg-[#3C8DBC] text-white px-4 py-3 flex justify-between items-center">
+                    <h3 className="font-bold text-lg">Exam Summary</h3>
+                    <button onClick={() => setIsSubmitConfirmOpen(false)} className="hover:bg-blue-700 text-white text-lg font-bold px-2 rounded">
+                        &times;
+                    </button>
+                </div>
+                
+                <div className="p-6">
+                    <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+                         <div className="flex justify-between border-b pb-1">
+                             <span>Total Questions:</span>
+                             <span className="font-bold">{allQuestionsMap.size}</span>
+                         </div>
+                         <div className="flex justify-between border-b pb-1">
+                             <span>Answered:</span>
+                             <span className="font-bold text-green-600">{overallStats.answered}</span>
+                         </div>
+                         <div className="flex justify-between border-b pb-1">
+                             <span>Not Answered:</span>
+                             <span className="font-bold text-red-600">{overallStats.notAnswered}</span>
+                         </div>
+                         <div className="flex justify-between border-b pb-1">
+                             <span>Not Visited:</span>
+                             <span className="font-bold text-gray-500">{overallStats.notVisited}</span>
+                         </div>
+                         <div className="flex justify-between border-b pb-1">
+                             <span>Marked for Review:</span>
+                             <span className="font-bold text-purple-600">{overallStats.marked}</span>
+                         </div>
+                         <div className="flex justify-between border-b pb-1">
+                             <span>Ans & Marked for Review:</span>
+                             <span className="font-bold text-purple-600">{overallStats.ansMarked}</span>
+                         </div>
+                    </div>
+                    
+                    <div className={`p-3 rounded text-center mb-6 text-sm font-semibold border ${highContrast ? 'bg-gray-700 border-gray-500 text-yellow-300' : 'bg-yellow-50 border-yellow-200 text-red-700'}`}>
+                        Are you sure you want to submit the exam? <br/>
+                        You will not be able to modify your answers after submission.
+                    </div>
+
+                    <div className="flex justify-center gap-4">
+                        <button 
+                            onClick={handleSubmit} 
+                            className="px-6 py-2 bg-[#28a745] hover:bg-[#218838] text-white font-bold rounded shadow-sm transition-colors"
+                        >
+                            Yes, Submit
+                        </button>
+                        <button 
+                            onClick={() => setIsSubmitConfirmOpen(false)} 
+                            className={`px-6 py-2 border font-bold rounded shadow-sm transition-colors ${highContrast ? 'bg-gray-600 hover:bg-gray-500 text-white' : 'bg-white hover:bg-gray-100 text-gray-700'}`}
+                        >
+                            No, Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
       {/* SUB-HEADER / SUBJECT TABS (Blue Strip) */}
       <div className={`flex justify-between items-center px-1 h-12 shadow-md ${highContrast ? 'bg-gray-900 border-b border-gray-700' : 'bg-[#3C8DBC]'}`}>
         <div className="flex h-full items-end pl-2 gap-1">
@@ -475,8 +568,18 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
                         {/* Question Number */}
                         <div className="flex items-start gap-4 mb-4">
                             <div className="font-bold whitespace-nowrap pt-1">Question No. {currentQuestion.orderIndex + 1}</div>
-                            <div className="flex-1">
-                                {/* Question Image/Text */}
+                            <div className="flex-1 space-y-4">
+                                {/* Question Image (if available) */}
+                                {currentQuestion.image && (
+                                    <div className="mb-4">
+                                        <img 
+                                            src={currentQuestion.image} 
+                                            alt="Question Diagram" 
+                                            className="max-w-full h-auto border rounded shadow-sm"
+                                        />
+                                    </div>
+                                )}
+                                {/* Question Text */}
                                 <MathRenderer text={currentQuestion.text} className={`text-lg leading-loose font-medium ${highContrast ? 'text-gray-100' : 'text-gray-900'}`} />
                             </div>
                             {/* Down Arrow for Scroll */}
@@ -533,13 +636,6 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
                                     value={responses[currentQuestionId]?.numericAnswer || ''}
                                     onChange={handleManualNumericChange}
                                 />
-                                
-                                {/* VIRTUAL KEYBOARD */}
-                                <VirtualKeyboard 
-                                    onInput={handleNumericInput}
-                                    onBackspace={handleNumericBackspace}
-                                    onClear={handleNumericClear}
-                                />
                             </div>
                         )}
                     </div>
@@ -564,6 +660,14 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
                         `}
                     >
                         Clear
+                    </button>
+                    <button 
+                        onClick={moveToPreviousQuestion}
+                        className={`px-4 py-2 border font-semibold rounded shadow-sm transition-colors active:translate-y-0.5 ml-2
+                             ${highContrast ? 'bg-gray-700 border-gray-600 text-white hover:bg-gray-600' : 'bg-white border-gray-300 text-black hover:bg-gray-50'}
+                        `}
+                    >
+                        &larr; Back
                     </button>
                 </div>
                 
@@ -651,17 +755,14 @@ const ExamScreen: React.FC<Props> = ({ exam, onFinish, userName = "Anonymous Use
                     questions={currentSubjectQuestions}
                     currentQuestionId={currentQuestionId}
                     responses={responses}
-                    onNavigate={moveToNextQuestion} 
+                    onNavigate={handlePaletteNavigation} 
                 />
             </div>
 
             {/* Bottom Submit */}
             <div className={`p-4 border-t ${highContrast ? 'bg-gray-800 border-gray-700' : 'bg-[#E5F6FD] border-gray-300'}`}>
                 <button 
-                    onClick={() => {
-                        const confirmSubmit = window.confirm("Are you sure you want to submit the exam?");
-                        if(confirmSubmit) handleSubmit();
-                    }}
+                    onClick={() => setIsSubmitConfirmOpen(true)}
                     className={`w-full py-2 font-bold rounded shadow-sm transition-colors border
                          ${highContrast 
                              ? 'bg-green-700 hover:bg-green-600 text-white border-green-500' 

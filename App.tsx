@@ -4,9 +4,9 @@ import ExamScreen from './components/ExamScreen';
 import ResultScreen from './components/ResultScreen';
 import AuthScreen from './components/AuthScreen';
 import Dashboard from './components/Dashboard';
-import { MOCK_EXAM } from './services/mockData';
 import { ExamState, Exam, QuestionType } from './types';
 import { supabase } from './services/supabase';
+import { loadExamData } from './data/papers/registry';
 
 type ViewState = 'AUTH' | 'DASHBOARD' | 'LANDING' | 'INSTRUCTIONS' | 'EXAM' | 'RESULT';
 
@@ -42,13 +42,15 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleSelectExam = (examId: string) => {
-    if (examId === 'jee-main-2025-jan-22-s1') {
-      setActiveExam(MOCK_EXAM);
+  const handleSelectExam = async (examId: string) => {
+    try {
+      const examData = await loadExamData(examId);
+      setActiveExam(examData);
       setView('INSTRUCTIONS');
-      setIsChecked(false); 
-    } else {
-      alert("This exam content is not yet loaded.");
+      setIsChecked(false);
+    } catch (error) {
+      alert("This exam content is coming soon or failed to load.");
+      console.error(error);
     }
   };
 
@@ -72,6 +74,7 @@ function App() {
         currentQuestionId: examSnapshot.subjects[0].sections[0].questions[0].id,
         responses: responses,
         timeLeftSeconds: 0,
+        subjectTimes: attempt.section_timing || {}, // Retrieve timing
         isSubmitModalOpen: false,
         examStatus: 'SUBMITTED'
     };
@@ -131,6 +134,7 @@ function App() {
                     incorrect_answers: incorrect,
                     total_questions: qMap.size,
                     details: examState.responses,
+                    section_timing: examState.subjectTimes, // Save timing data
                     exam_snapshot: exam,
                     created_at: new Date().toISOString()
                 }

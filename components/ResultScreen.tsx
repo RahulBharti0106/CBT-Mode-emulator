@@ -95,6 +95,16 @@ const ResultScreen: React.FC<Props> = ({ exam, result, saveStatus, onBack }) => 
     return { total, attempted, markedForReview, correct, incorrect, score, analysisData };
   }, [exam, result]);
 
+  // --- TIME FORMATTING HELPER ---
+  const formatTime = (seconds: number) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    if (hrs > 0) return `${hrs}h ${mins}m ${secs}s`;
+    return `${mins}m ${secs}s`;
+  };
+
   // --- RENDER HELPERS ---
 
   const renderSolution = (item: any) => {
@@ -174,6 +184,24 @@ const ResultScreen: React.FC<Props> = ({ exam, result, saveStatus, onBack }) => 
         </div>
 
         <div className="max-w-4xl mx-auto w-full p-4 space-y-4">
+            
+            {/* Time Analysis Section */}
+            <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+                <h3 className="text-gray-700 font-bold mb-3 border-b pb-2">Time Analysis</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {exam.subjects.map(sub => {
+                        const timeSpent = result.subjectTimes?.[sub.id] || 0;
+                        return (
+                            <div key={sub.id} className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex justify-between items-center">
+                                <span className="font-semibold text-blue-900">{sub.name}</span>
+                                <span className="font-mono font-bold text-blue-700">{formatTime(timeSpent)}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Questions List */}
             {stats.analysisData.map((item, index) => (
                 <div key={item.question.id} className="bg-white rounded-lg shadow-sm overflow-hidden">
                     <div 
@@ -276,6 +304,18 @@ const ResultScreen: React.FC<Props> = ({ exam, result, saveStatus, onBack }) => 
                     <div className="text-2xl font-bold text-purple-600">{stats.markedForReview}</div>
                     <div className="text-xs text-purple-800 font-medium">Marked for Review <br/><span className="text-[10px] opacity-75">(Not Saved)</span></div>
                  </div>
+            </div>
+        </div>
+
+        {/* Quick Time Summary on Scorecard */}
+        <div className="mb-8 border-t pt-6">
+            <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-4">Time Spent</h3>
+            <div className="flex justify-center gap-2 text-sm flex-wrap">
+                 {exam.subjects.map(sub => (
+                    <div key={sub.id} className="px-3 py-1 bg-gray-100 rounded-full border border-gray-200 text-gray-600">
+                        {sub.name}: <span className="font-bold text-gray-900">{formatTime(result.subjectTimes?.[sub.id] || 0)}</span>
+                    </div>
+                 ))}
             </div>
         </div>
 

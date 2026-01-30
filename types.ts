@@ -20,6 +20,7 @@ export interface Option {
 export interface Question {
   id: string;
   text: string;
+  image?: string; // URL for the question diagram/image
   type: QuestionType;
   options?: Option[]; // For MCQ
   correctValue?: number; // For Numeric
@@ -62,6 +63,7 @@ export interface ExamState {
   currentQuestionId: string; // We track exact question for navigation
   responses: Record<string, UserResponse>;
   timeLeftSeconds: number;
+  subjectTimes: Record<string, number>; // Maps Subject ID -> Seconds spent
   isSubmitModalOpen: boolean;
   examStatus: 'INSTRUCTIONS' | 'ONGOING' | 'SUBMITTED';
 }

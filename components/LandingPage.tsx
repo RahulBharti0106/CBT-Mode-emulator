@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { supabase } from '../services/supabase';
-import { EXAM_REGISTRY } from '../services/mockData';
+import { EXAM_REGISTRY } from '../data/papers/registry';
 import { ExamMetadata, ExamType } from '../types';
 
 interface Props {
