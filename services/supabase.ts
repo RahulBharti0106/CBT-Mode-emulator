@@ -28,3 +28,30 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 // Create a single supabase client for interacting with your database
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export const uploadExamAsset = async (blob: Blob, path: string): Promise<string> => {
+  try {
+    const { data, error } = await supabase.storage
+      .from('exam-assets')
+      .upload(path, blob, {
+        upsert: true,
+        contentType: 'image/png'
+      });
+
+    if (error) {
+      // If bucket doesn't exist, this will fail. 
+      // We assume 'exam-assets' bucket exists and is public.
+      console.error('Upload error:', error);
+      throw error;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('exam-assets')
+      .getPublicUrl(path);
+
+    return publicUrl;
+  } catch (err) {
+    console.error('Asset upload failed:', err);
+    throw err;
+  }
+};

@@ -4,11 +4,12 @@ import ExamScreen from './components/ExamScreen';
 import ResultScreen from './components/ResultScreen';
 import AuthScreen from './components/AuthScreen';
 import Dashboard from './components/Dashboard';
+import AdminUpload from './components/AdminUpload';
 import { ExamState, Exam, QuestionType } from './types';
 import { supabase } from './services/supabase';
 import { loadExamData } from './data/papers/registry';
 
-type ViewState = 'AUTH' | 'DASHBOARD' | 'LANDING' | 'INSTRUCTIONS' | 'EXAM' | 'RESULT';
+type ViewState = 'AUTH' | 'DASHBOARD' | 'LANDING' | 'INSTRUCTIONS' | 'EXAM' | 'RESULT' | 'ADMIN';
 
 function App() {
   const [session, setSession] = useState<any>(null);
@@ -54,6 +55,13 @@ function App() {
     }
   };
 
+  const handleExamUploaded = (exam: Exam) => {
+      // When an exam is created/uploaded via Admin tool, we load it directly
+      setActiveExam(exam);
+      setView('INSTRUCTIONS');
+      setIsChecked(false);
+  };
+
   const handleFinishExam = (state: ExamState) => {
     setResult(state);
     setView('RESULT');
@@ -96,7 +104,6 @@ function App() {
   const calculateAndSave = async (examState: ExamState, exam: Exam) => {
     if (!session?.user) return;
     setIsSaving(true);
-    // ... (rest of logic same as before, simplified for XML brevity)
     // 1. Calculate Score
     let correct = 0; let incorrect = 0; let score = 0;
     const qMap = new Map();
@@ -147,9 +154,25 @@ function App() {
   // --- RENDER VIEWS ---
 
   if (view === 'AUTH') { return <AuthScreen />; }
-  if (view === 'DASHBOARD' && session) { return <Dashboard user={session.user} onStartExam={() => setView('LANDING')} onViewAnalysis={handleViewAnalysis} />; }
+  
+  if (view === 'DASHBOARD' && session) { 
+      return (
+        <Dashboard 
+            user={session.user} 
+            onStartExam={() => setView('LANDING')} 
+            onViewAnalysis={handleViewAnalysis}
+            onAdminUpload={() => setView('ADMIN')}
+        />
+      ); 
+  }
+  
   if (view === 'LANDING') { return <LandingPage onSelectExam={handleSelectExam} onBackToDashboard={() => setView('DASHBOARD')} user={session?.user} />; }
+  
   if (view === 'RESULT' && activeExam && result) { return <ResultScreen exam={activeExam} result={result} saveStatus={saveStatus} onBack={handleBackToDashboard} />; }
+
+  if (view === 'ADMIN') {
+      return <AdminUpload onExamLoaded={handleExamUploaded} onCancel={() => setView('DASHBOARD')} />;
+  }
 
   // --- INSTRUCTIONS VIEW (UPDATED) ---
   if (view === 'INSTRUCTIONS' && activeExam) {
@@ -218,32 +241,6 @@ function App() {
                                <li>Click on <strong>Mark for Review & Next</strong> to save your answer for the current question, mark it for review, and then go to the next question.</li>
                            </ol>
                        </li>
-                   </ol>
-               </div>
-
-               <div className="space-y-2">
-                   <h3 className="font-bold text-base underline">Answering a Question:</h3>
-                   <ol className="list-decimal pl-5 space-y-1" start={5}>
-                       <li>Procedure for answering a multiple choice type question:
-                           <ol className="list-[lower-alpha] pl-5 mt-1 space-y-1">
-                               <li>To select your answer, click on the button of one of the options.</li>
-                               <li>To deselect your chosen answer, click on the button of the chosen option again or click on the <strong>Clear Response</strong> button.</li>
-                               <li>To change your chosen answer, click on the button of another option.</li>
-                               <li>To save your answer, you MUST click on the <strong>Save & Next</strong> button.</li>
-                               <li>To mark the question for review, click on the <strong>Mark for Review & Next</strong> button.</li>
-                           </ol>
-                       </li>
-                       <li>To change your answer to a question that has already been answered, first select that question for answering and then follow the procedure for answering that type of question.</li>
-                   </ol>
-               </div>
-               
-               <div className="space-y-2">
-                   <h3 className="font-bold text-base underline">Navigating through sections:</h3>
-                   <ol className="list-decimal pl-5 space-y-1" start={7}>
-                       <li>Sections in this question paper are displayed on the top bar of the screen. Questions in a section can be viewed by click on the section name. The section you are currently viewing is highlighted.</li>
-                       <li>After click the Save & Next button on the last question for a section, you will automatically be taken to the first question of the next section.</li>
-                       <li>You can shuffle between sections and questions anytime during the examination as per your convenience only during the time stipulated.</li>
-                       <li>Candidate can view the corresponding section summary as part of the legend that appears in every section above the question palette.</li>
                    </ol>
                </div>
                

@@ -5,10 +5,11 @@ import { Exam } from '../types';
 interface DashboardProps {
   onStartExam: () => void;
   onViewAnalysis: (attempt: any) => void;
+  onAdminUpload: () => void;
   user: any;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onStartExam, onViewAnalysis, user }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onStartExam, onViewAnalysis, onAdminUpload, user }) => {
   const [attempts, setAttempts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -76,13 +77,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onStartExam, onViewAnalysis, user
                         : 0}
                 </div>
             </div>
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-center items-start">
+            
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col gap-3 justify-center">
                 <button 
                     onClick={onStartExam}
-                    className="w-full h-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition-colors flex items-center justify-center gap-2"
                 >
                     <span>Take New Test</span>
                     <span className="text-xl">→</span>
+                </button>
+                <button 
+                    onClick={onAdminUpload}
+                    className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-lg border border-gray-300 transition-colors text-sm"
+                >
+                    Digitize New Exam (Admin)
                 </button>
             </div>
         </div>
