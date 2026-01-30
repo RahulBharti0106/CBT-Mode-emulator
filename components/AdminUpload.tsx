@@ -3,7 +3,7 @@ import { parsePdfToExam } from '../services/geminiService';
 import { uploadExamAsset } from '../services/supabase';
 import { Exam, Question } from '../types';
 // @ts-ignore
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@3.11.174';
 
 // Handle ES module import structure for PDF.js (default vs named exports)
 const pdfjs = (pdfjsLib as any).default || pdfjsLib;
